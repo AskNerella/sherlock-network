@@ -31,7 +31,7 @@ llm:
 
 actions:
   anypoint_list_apis:
-    target: "mcp://anypointApisCatalogConnection"
+    target: "mcp://sherlockAnypointDxConnection"
     kind: "mcp:tool"
     tool_name: "list_apis"
     inputs:
@@ -40,7 +40,7 @@ actions:
       limit: string
 
   anypoint_find_assets:
-    target: "mcp://anypointApisCatalogConnection"
+    target: "mcp://sherlockAnypointApisCatalogConnection"
     kind: "mcp:tool"
     tool_name: "find_assets"
     inputs:
@@ -50,7 +50,7 @@ actions:
       user_query: string
 
   anypoint_list_applications:
-    target: "mcp://anypointPlatformConnection"
+    target: "mcp://sherlockAnypointDxConnection"
     kind: "mcp:tool"
     tool_name: "list_applications"
     inputs:
@@ -58,7 +58,7 @@ actions:
       appName: string
 
   anypoint_get_api_details:
-    target: "mcp://anypointApisCatalogConnection"
+    target: "mcp://sherlockAnypointApisCatalogConnection"
     kind: "mcp:tool"
     tool_name: "view_api_version_details"
     inputs:
@@ -127,13 +127,6 @@ actions:
       limit: string
       query: string
 
-  linear_list_statuses:
-    target: "mcp://linearConnection"
-    kind: "mcp:tool"
-    tool_name: "list_issue_statuses"
-    inputs:
-      team: string
-
   linear_save_issue:
     target: "mcp://linearConnection"
     kind: "mcp:tool"
@@ -156,7 +149,7 @@ actions:
 
 trigger sherlockTrigger:
   kind: "a2a"
-  target: "brokers://sherlockBroker/a2a"
+  target: "brokers://sherlockAgentBroker/a2a"
   on_message: ->
     transition to @echo.scanStartNotification
 

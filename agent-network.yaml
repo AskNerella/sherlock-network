@@ -30,20 +30,20 @@ registry:
                     path: /mcp
         
     llms:
-        openai:
+        sherlockLLM:
             info:
-                label: OpenAI
-                description: OpenAI LLM Provider
+                label: Sherlock LLM
+                description: Sherlock LLM Provider
             metadata:
                 platform: OpenAI
 context:
     connections:
-        anypointPlatformConnection:
+        sherlockAnypointDxConnection:
             kind: mcp
             ref:
                 name: sherlockAnypointDxMcp
             url: ${anypointPlatform.url}
-        anypointApisCatalogConnection:
+        sherlockAnypointApisCatalogConnection:
             kind: mcp
             ref:
                 name: mulesoft-platform-mcp-server
@@ -63,6 +63,7 @@ context:
             authentication:
                 kind: apiKey
                 apiKey: ${gitbooks.apiKey}
+                headerName: Authorization
         githubConnection:
             kind: mcp
             ref:
@@ -72,6 +73,7 @@ context:
             authentication:
                 kind: apiKey
                 apiKey: ${github.apiKey}
+                headerName: Authorization
         linearConnection:
             kind: mcp
             ref:
@@ -80,16 +82,17 @@ context:
             authentication:
                 kind: apiKey
                 apiKey: ${linear.apiKey}
+                headerName: Authorization
         llmConnection:
             kind: llm
             ref:
-                name: openai
+                name: sherlockLLM
             url: https://api.openai.com/v1
             authentication:
                 kind: apiKey
                 apiKey: ${openai.apiKey}
 brokers:
-    sherlockBroker:
+    sherlockAgentBroker:
         kind: AgentScript
         implementation: ./brokers/sherlock.agent
         interfaces:
