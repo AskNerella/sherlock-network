@@ -1,0 +1,293 @@
+# @dialect: AGENTFABRIC=1.1
+system:
+  instructions: |
+    You are Sherlock — the Recon & Discovery Agent within the KATE documentation network.
+    
+    Your mission: Discover ALL integration assets. If no specific app is named, scan every
+    application in Anypoint Platform. For each app found:
+    
+    1. Scan Anypoint Platform: Use list_apis for APIs, find_assets for Exchange, list_applications for deployed apps
+    2. Scan GitHub: Find linked repositories, Mule XML flows, DataWeave transforms, README files
+    3. Scan GitBooks: Find any existing documentation using list_sites + get_site_structure + get_page
+    4. Create ONE Linear task per app using save_issue:
+       - Title: "[KATE] Document: <App Name>"
+       - Description with Anypoint app name, GitHub repo links, GitBooks doc links, API list, environments
+    5. Add each individual finding as a separate comment using save_comment:
+       - "Sherlock — Found API: <name> in Anypoint Platform (<env>)"
+       - "Sherlock — GitHub repo found: <url> | Mule files: <count>"
+       - "Sherlock — Existing GitBooks docs found: <title> (<url>)"
+    
+    Return the full asset catalog with Linear task IDs for all downstream agents.
+
+config:
+  agent_name: "SHERLOCK"
+  default_llm: @llm.omniLLM
+
+llm:
+  omniLLM:
+    target: "llm://llmConnection"
+    kind: "OpenAI"
+    model: "gpt-5.6-luna"
+
+actions:
+  anypoint_list_apis:
+    target: "mcp://anypointApisCatalogConnection"
+    kind: "mcp:tool"
+    tool_name: "list_apis"
+    inputs:
+      organization_id: string
+      name: string
+      limit: string
+
+  anypoint_find_assets:
+    target: "mcp://anypointApisCatalogConnection"
+    kind: "mcp:tool"
+    tool_name: "find_assets"
+    inputs:
+      query: string
+      asset_type: string
+      max_results: string
+      user_query: string
+
+  anypoint_list_applications:
+    target: "mcp://anypointPlatformConnection"
+    kind: "mcp:tool"
+    tool_name: "list_applications"
+    inputs:
+      environmentName: string
+      appName: string
+
+  anypoint_get_api_details:
+    target: "mcp://anypointApisCatalogConnection"
+    kind: "mcp:tool"
+    tool_name: "view_api_version_details"
+    inputs:
+      organization_id: string
+      asset_id: string
+      api_version: string
+      version: string
+
+  github_search_repos:
+    target: "mcp://githubConnection"
+    kind: "mcp:tool"
+    tool_name: "search_repositories"
+    inputs:
+      query: string
+      page: string
+      per_page: string
+
+  github_get_file_contents:
+    target: "mcp://githubConnection"
+    kind: "mcp:tool"
+    tool_name: "get_file_contents"
+    inputs:
+      owner: string
+      repo: string
+      path: string
+
+  github_list_contents:
+    target: "mcp://githubConnection"
+    kind: "mcp:tool"
+    tool_name: "list_directory"
+    inputs:
+      owner: string
+      repo: string
+      path: string
+
+  gitbooks_list_sites:
+    target: "mcp://gitbooksConnection"
+    kind: "mcp:tool"
+    tool_name: "list_sites"
+    inputs:
+      organizationId: string
+      limit: string
+
+  gitbooks_get_structure:
+    target: "mcp://gitbooksConnection"
+    kind: "mcp:tool"
+    tool_name: "get_site_structure"
+    inputs:
+      organizationId: string
+      siteId: string
+
+  gitbooks_get_page:
+    target: "mcp://gitbooksConnection"
+    kind: "mcp:tool"
+    tool_name: "get_page"
+    inputs:
+      spaceId: string
+      pageId: string
+      path: string
+
+  linear_list_teams:
+    target: "mcp://linearConnection"
+    kind: "mcp:tool"
+    tool_name: "list_teams"
+    inputs:
+      limit: string
+      query: string
+
+  linear_list_statuses:
+    target: "mcp://linearConnection"
+    kind: "mcp:tool"
+    tool_name: "list_issue_statuses"
+    inputs:
+      team: string
+
+  linear_save_issue:
+    target: "mcp://linearConnection"
+    kind: "mcp:tool"
+    tool_name: "save_issue"
+    inputs:
+      team: string
+      title: string
+      description: string
+      priority: string
+      state: string
+      issue_id: string
+
+  linear_save_comment:
+    target: "mcp://linearConnection"
+    kind: "mcp:tool"
+    tool_name: "save_comment"
+    inputs:
+      issueId: string
+      body: string
+
+trigger sherlockTrigger:
+  kind: "a2a"
+  target: "brokers://sherlockBroker/a2a"
+  on_message: ->
+    transition to @echo.scanStartNotification
+
+echo scanStartNotification:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_WORKING"
+  message: a2a.message({
+    messageId: uuid(),
+    parts: [
+      a2a.textPart("🔍 Sherlock is on the case. Scanning Anypoint Platform, GitHub, and GitBooks...")
+    ]
+  })
+  on_exit: ->
+    transition to @orchestrator.discoverAndTrack
+
+orchestrator discoverAndTrack:
+  description: "Discover all assets across Anypoint, GitHub, GitBooks and create Linear tasks"
+  label: "Full Discovery + Linear Task Creation"
+  system:
+    instructions: |
+      You are Sherlock performing full asset discovery and creating Linear tracking tasks.
+      
+      STEP 1 — Parse Input:
+      Extract scope (ALL or SPECIFIC) and project name from the input message.
+      If scope is ALL, discover every application. If SPECIFIC, focus on the named project.
+      
+      STEP 2 — Anypoint Platform Scan:
+      - Use anypoint_list_applications to list all deployed applications per environment
+      - Use anypoint_list_apis to list all APIs in API Manager
+      - Use anypoint_find_assets to search Exchange for related assets (pass user_query = project name or "")
+      - Use anypoint_get_api_details for detailed API information
+      
+      STEP 3 — GitHub Scan (per app):
+      - Use github_search_repos to find repos matching the app name
+      - Use github_list_contents to list src/main/mule/ and src/main/resources/dwl/
+      - Use github_get_file_contents to read README.md
+      
+      STEP 4 — GitBooks Scan (per app):
+      - Use gitbooks_list_sites to get all sites in the organization
+      - Use gitbooks_get_structure to get each site's space/page hierarchy
+      - Use gitbooks_get_page to read any relevant existing documentation pages
+      
+      STEP 5 — Create Linear Tasks:
+      - Use linear_list_teams to get available teams (pass limit="10")
+      - For each app discovered, use linear_save_issue to create: 
+          title: "[KATE] Document: <App Name>"
+          description: full markdown description with all findings
+          team: first available team name
+          priority: "3" (medium)
+      - After creating each issue, use linear_save_comment to add finding comments:
+          "Sherlock — API found: <name> v<version> in <environment>"
+          "Sherlock — GitHub repo: <url> | Mule files: <n> | DataWeave files: <n>"
+          "Sherlock — GitBooks doc found: <title> | <url>"
+      
+      Return the complete catalog JSON with linear issue IDs per app.
+  reasoning:
+    instructions: ->
+      | Perform full discovery and create Linear tracking tasks.
+        
+        Input: {!@request.payload.message.parts[0].text}
+        
+        Execute all 5 steps. Return JSON:
+        {
+          "apps": [{
+            "name": "string",
+            "linear_task_id": "string",
+            "linear_task_identifier": "string",
+            "anypoint_apis": [{"name":"string","version":"string","environment":"string"}],
+            "github_repos": [{"url":"string","mule_files":[],"dataweave_files":[]}],
+            "gitbooks_docs": [{"title":"string","url":"string","spaceId":"string"}],
+            "environments": []
+          }],
+          "total_apps": "string",
+          "linear_team_name": "string",
+          "status": "string"
+        }
+    actions:
+      anypoint_list_applications: @actions.anypoint_list_applications
+      anypoint_list_apis: @actions.anypoint_list_apis
+      anypoint_find_assets: @actions.anypoint_find_assets
+      anypoint_get_api_details: @actions.anypoint_get_api_details
+      github_search_repos: @actions.github_search_repos
+      github_get_file_contents: @actions.github_get_file_contents
+      github_list_contents: @actions.github_list_contents
+      gitbooks_list_sites: @actions.gitbooks_list_sites
+      gitbooks_get_structure: @actions.gitbooks_get_structure
+      gitbooks_get_page: @actions.gitbooks_get_page
+      linear_list_teams: @actions.linear_list_teams
+      linear_save_issue: @actions.linear_save_issue
+      linear_save_comment: @actions.linear_save_comment
+    outputs:
+      properties:
+        catalog:
+          type: "string"
+          description: "Complete JSON asset catalog with Linear task IDs per app"
+        total_apps:
+          type: "string"
+          description: "Total number of apps discovered"
+        linear_team_name:
+          type: "string"
+          description: "Linear team used for task creation"
+        status:
+          type: "string"
+          description: "Discovery status: success or failed"
+  on_exit: ->
+    transition to @router.discoveryRouter
+
+router discoveryRouter:
+  routes:
+    - target: @echo.discoverySuccess
+      when: @orchestrator.discoverAndTrack.output.status == "success"
+      label: "Discovery Successful"
+  otherwise:
+    target: @echo.discoveryError
+
+echo discoverySuccess:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_COMPLETED"
+  message: a2a.message({
+    messageId: uuid(),
+    parts: [
+      a2a.textPart("✅ Sherlock completed reconnaissance. Discovered {!@orchestrator.discoverAndTrack.output.total_apps} apps. Linear tasks created.\n\nTeam: {!@orchestrator.discoverAndTrack.output.linear_team_name}\n\nCatalog:\n{!@orchestrator.discoverAndTrack.output.catalog}")
+    ]
+  })
+
+echo discoveryError:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_FAILED"
+  message: a2a.message({
+    messageId: uuid(),
+    parts: [
+      a2a.textPart("❌ Sherlock encountered an error. Partial catalog: {!@orchestrator.discoverAndTrack.output.catalog}")
+    ]
+  })

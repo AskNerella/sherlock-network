@@ -1,0 +1,116 @@
+agentNetwork: 2.0.0
+info:
+    label: sherlock-network
+    version: v1
+registry:
+    mcps:
+        sherlockAnypointDxMcp:
+            info:
+                label: MuleSoft DX MCP
+                description: MuleSoft Developer Experience - deployed applications, runtime management, CloudHub
+            metadata:
+                transport:
+                    kind: streamableHttp
+                    path: /mcp
+        sherlockGitbooksMcp:
+            info:
+                label: GitBooks MCP
+                description: GitBooks documentation platform for reading and writing documentation spaces and pages
+            metadata:
+                transport:
+                    kind: streamableHttp
+                    path: /mcp
+        sherlockLinearMcp:
+            info:
+                label: Linear MCP
+                description: Linear project management - create and update issues, track work items and projects
+            metadata:
+                transport:
+                    kind: streamableHttp
+                    path: /mcp
+        
+    llms:
+        openai:
+            info:
+                label: OpenAI
+                description: OpenAI LLM Provider
+            metadata:
+                platform: OpenAI
+context:
+    connections:
+        anypointPlatformConnection:
+            kind: mcp
+            ref:
+                name: sherlockAnypointDxMcp
+            url: ${anypointPlatform.url}
+        anypointApisCatalogConnection:
+            kind: mcp
+            ref:
+                name: mulesoft-platform-mcp-server
+                namespace: 68e53915-e89b-4e82-b794-12d37982db4c
+            url: ${anypointApisCatalog.url}
+            authentication:
+                kind: oauth2-client-credentials
+                clientId: ${anypointApisCatalog.clientId}
+                clientSecret: ${anypointApisCatalog.clientSecret}
+                token:
+                    url: ${anypointApisCatalog.tokenUrl}
+        gitbooksConnection:
+            kind: mcp
+            ref:
+                name: sherlockGitbooksMcp
+            url: ${gitbooks.url}
+            authentication:
+                kind: apiKey
+                apiKey: ${gitbooks.apiKey}
+        githubConnection:
+            kind: mcp
+            ref:
+                name: github-asset
+                namespace: 68e53915-e89b-4e82-b794-12d37982db4c
+            url: ${github.url}
+            authentication:
+                kind: apiKey
+                apiKey: ${github.apiKey}
+        linearConnection:
+            kind: mcp
+            ref:
+                name: sherlockLinearMcp
+            url: ${linear.url}
+            authentication:
+                kind: apiKey
+                apiKey: ${linear.apiKey}
+        llmConnection:
+            kind: llm
+            ref:
+                name: openai
+            url: https://api.openai.com/v1
+            authentication:
+                kind: apiKey
+                apiKey: ${openai.apiKey}
+brokers:
+    sherlockBroker:
+        kind: AgentScript
+        implementation: ./brokers/sherlock.agent
+        interfaces:
+            a2a:
+                card:
+                    name: Sherlock Recon Agent
+                    description: Scans Anypoint Platform, GitHub, and GitBooks. Creates a Linear task per discovered app with findings.
+                    version: 1.0.0
+                    capabilities:
+                        streaming: true
+                        pushNotifications: false
+                    defaultInputModes:
+                        - text/plain
+                    defaultOutputModes:
+                        - application/json
+                    skills:
+                        - id: discover-assets
+                          name: Discover Assets
+                          description: Scan Anypoint Platform, GitHub, and GitBooks to catalog all APIs and create Linear tasks.
+                          tags:
+                              - discovery
+                              - recon
+                              - gitbooks
+                              - linear

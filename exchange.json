@@ -1,0 +1,109 @@
+{
+  "main": "agent-network.yaml",
+  "name": "sherlock-network",
+  "classifier": "agentic-network",
+  "organizationId": "72aaa304-0a87-40c9-8a75-b32b686ae5f8",
+  "descriptorVersion": "1.0.0",
+  "apiVersion": "v1",
+  "tags": [],
+  "groupId": "72aaa304-0a87-40c9-8a75-b32b686ae5f8",
+  "assetId": "sherlock-network",
+  "version": "1.0.0",
+  "dependencies": [
+    {
+      "classifier": "mcp-metadata",
+      "packaging": "zip",
+      "groupId": "68e53915-e89b-4e82-b794-12d37982db4c",
+      "assetId": "mulesoft-platform-mcp-server",
+      "version": "1.0.0"
+    },
+    {
+      "classifier": "mcp-metadata",
+      "packaging": "zip",
+      "groupId": "68e53915-e89b-4e82-b794-12d37982db4c",
+      "assetId": "github-asset",
+      "version": "2.0.0"
+    }
+  ],
+  "metadata": {
+    "variables": {
+      "anypointPlatform": {
+        "url": {
+          "description": "MuleSoft DX MCP Server URL (deployed apps, runtime management)",
+          "default": "https://muskier-loreen-spiritually.ngrok-free.dev/mcp/",
+          "secret": false
+        }
+      },
+      "anypointApisCatalog": {
+        "url": {
+          "description": "Anypoint Platform API Catalog MCP Server URL (list_apis, find_assets, API Manager)",
+          "default": "https://omni.mulesoft.com/mcp/",
+          "secret": false
+        },
+        "clientId": {
+          "description": "Anypoint Platform API Catalog client ID",
+          "default": "",
+          "secret": true
+        },
+        "clientSecret": {
+          "description": "Anypoint Platform API Catalog client secret",
+          "default": "",
+          "secret": true
+        },
+        "tokenUrl": {
+          "description": "Anypoint Platform API Catalog token URL",
+          "default": "https://anypoint.mulesoft.com/accounts/api/v2/oauth2/token",
+          "secret": false
+        }
+      },
+      "gitbooks": {
+        "url": {
+          "description": "GitBooks MCP Server URL",
+          "default": "https://mcp.gitbook.com/mcp/",
+          "secret": false
+        },
+        "apiKey": {
+          "description": "GitBooks API key",
+          "default": "",
+          "secret": true
+        }
+      },
+      "github": {
+        "url": {
+          "description": "GitHub MCP Server URL",
+          "default": "https://api.githubcopilot.com/mcp/",
+          "secret": false
+        },
+        "apiKey": {
+          "description": "GitHub API key",
+          "default": "",
+          "secret": true
+        }
+      },
+      "linear": {
+        "url": {
+          "description": "Linear MCP Server URL",
+          "default": "https://mcp.linear.app/mcp/",
+          "secret": false
+        },
+        "apiKey": {
+          "description": "Linear API key",
+          "default": "",
+          "secret": true
+        }
+      },
+      "openai": {
+        "url": {
+          "description": "OpenAI API URL",
+          "default": "https://api.openai.com/v1",
+          "secret": false
+        },
+        "apiKey": {
+          "description": "OpenAI API key",
+          "default": "",
+          "secret": true
+        }
+      }
+    }
+  }
+}
