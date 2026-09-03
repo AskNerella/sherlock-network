@@ -11,14 +11,14 @@
       "anypointPlatform": {
         "url": {
           "description": "MuleSoft DX MCP Server URL (deployed apps, runtime management)",
-          "default": "https://muskier-loreen-spiritually.ngrok-free.dev/mcp/",
+          "default": "https://muskier-loreen-spiritually.ngrok-free.dev/",
           "secret": false
         }
       },
       "anypointApisCatalog": {
         "url": {
           "description": "Anypoint Platform API Catalog MCP Server URL (list_apis, find_assets, API Manager)",
-          "default": "https://omni.mulesoft.com/mcp/",
+          "default": "https://omni.mulesoft.com/",
           "secret": false
         },
         "clientId": {
@@ -40,7 +40,7 @@
       "gitbooks": {
         "url": {
           "description": "GitBooks MCP Server URL",
-          "default": "https://mcp.gitbook.com/mcp/",
+          "default": "https://mcp.gitbook.com/",
           "secret": false
         },
         "apiKey": {
@@ -52,7 +52,7 @@
       "github": {
         "url": {
           "description": "GitHub MCP Server URL",
-          "default": "https://api.githubcopilot.com/mcp/",
+          "default": "https://api.githubcopilot.com/",
           "secret": false
         },
         "apiKey": {
@@ -64,7 +64,7 @@
       "linear": {
         "url": {
           "description": "Linear MCP Server URL",
-          "default": "https://mcp.linear.app/mcp/",
+          "default": "https://mcp.linear.app/",
           "secret": false
         },
         "apiKey": {
