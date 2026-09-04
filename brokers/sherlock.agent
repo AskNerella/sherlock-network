@@ -33,7 +33,7 @@ actions:
   anypoint_list_apis:
     target: "mcp://sherlockAnypointDxConnection"
     kind: "mcp:tool"
-    tool_name: "list_apis"
+    tool_name: "list_api_instances"
     inputs:
       organization_id: string
       name: string
@@ -80,15 +80,6 @@ actions:
     target: "mcp://githubConnection"
     kind: "mcp:tool"
     tool_name: "get_file_contents"
-    inputs:
-      owner: string
-      repo: string
-      path: string
-
-  github_list_contents:
-    target: "mcp://githubConnection"
-    kind: "mcp:tool"
-    tool_name: "list_directory"
     inputs:
       owner: string
       repo: string

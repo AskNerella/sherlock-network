@@ -12,10 +12,26 @@ registry:
                 transport:
                     kind: streamableHttp
                     path: /mcp
+        sherlockMulesoftApisCatalogMcp:
+            info:
+                label: Anypoint Platform API Catalog MCP
+                description: Anypoint Platform API Catalog for listing APIs, finding assets, and API Manager
+            metadata:
+                transport:
+                    kind: streamableHttp
+                    path: /mcp/
         sherlockGitbooksMcp:
             info:
                 label: GitBooks MCP
                 description: GitBooks documentation platform for reading and writing documentation spaces and pages
+            metadata:
+                transport:
+                    kind: streamableHttp
+                    path: /mcp
+        sherlockGithubMcp:
+            info:
+                label: GitHub MCP
+                description: GitHub platform for managing repositories, issues, and pull requests
             metadata:
                 transport:
                     kind: streamableHttp
@@ -27,7 +43,6 @@ registry:
             metadata:
                 transport:
                     kind: streamableHttp
-                    path: /mcp
         
     llms:
         sherlockLLM:
@@ -46,8 +61,7 @@ context:
         sherlockAnypointApisCatalogConnection:
             kind: mcp
             ref:
-                name: mulesoft-platform-mcp-server
-                namespace: 68e53915-e89b-4e82-b794-12d37982db4c
+                name: sherlockMulesoftApisCatalogMcp
             url: ${anypointApisCatalog.url}
             authentication:
                 kind: oauth2-client-credentials
@@ -67,8 +81,7 @@ context:
         githubConnection:
             kind: mcp
             ref:
-                name: github-asset
-                namespace: 68e53915-e89b-4e82-b794-12d37982db4c
+                name: sherlockGithubMcp
             url: ${github.url}
             authentication:
                 kind: apiKey

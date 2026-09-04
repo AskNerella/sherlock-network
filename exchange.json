@@ -87,22 +87,7 @@
       }
     }
   },
-  "dependencies": [
-    {
-      "classifier": "mcp-metadata",
-      "packaging": "zip",
-      "groupId": "68e53915-e89b-4e82-b794-12d37982db4c",
-      "assetId": "mulesoft-platform-mcp-server",
-      "version": "1.0.0"
-    },
-    {
-      "classifier": "mcp-metadata",
-      "packaging": "zip",
-      "groupId": "68e53915-e89b-4e82-b794-12d37982db4c",
-      "assetId": "github-asset",
-      "version": "2.0.0"
-    }
-  ],
+  "dependencies": [],
   "groupId": "72aaa304-0a87-40c9-8a75-b32b686ae5f8",
   "assetId": "sherlock-network",
   "version": "1.0.0"
