@@ -43,7 +43,7 @@ registry:
             metadata:
                 transport:
                     kind: streamableHttp
-        
+                    
     llms:
         sherlockLLM:
             info:

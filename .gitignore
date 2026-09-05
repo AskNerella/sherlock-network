@@ -1,3 +1,4 @@
 .vscode
 .mvn
 target
+*.log

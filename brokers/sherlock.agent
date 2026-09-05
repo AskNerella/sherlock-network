@@ -85,6 +85,21 @@ actions:
       repo: string
       path: string
 
+  gitbooks_list_organizations:
+    target: "mcp://gitbooksConnection"
+    kind: "mcp:tool"
+    tool_name: "invoke_operation"
+    inputs:
+      operationId: string
+
+  gitbooks_search_content:
+    target: "mcp://gitbooksConnection"
+    kind: "mcp:tool"
+    tool_name: "invoke_operation"
+    inputs:
+      operationId: string
+      params: string
+
   gitbooks_list_sites:
     target: "mcp://gitbooksConnection"
     kind: "mcp:tool"
@@ -154,43 +169,349 @@ echo scanStartNotification:
     ]
   })
   on_exit: ->
-    transition to @orchestrator.discoverAndTrack
+    transition to @orchestrator.anypointScan
 
-orchestrator discoverAndTrack:
-  description: "Discover all assets across Anypoint, GitHub, GitBooks and create Linear tasks"
-  label: "Full Discovery + Linear Task Creation"
+# ─── STEP 1: Anypoint Platform Scan ────────────────────────────────────────
+
+orchestrator anypointScan:
+  description: "Scan Anypoint Platform for deployed apps, APIs, and Exchange assets"
+  label: "Anypoint Platform Scan"
   system:
     instructions: |
-      You are Sherlock performing full asset discovery and creating Linear tracking tasks.
+      You are Sherlock performing Anypoint Platform discovery.
       
-      STEP 1 — Parse Input:
-      Extract scope (ALL or SPECIFIC) and project name from the input message.
-      If scope is ALL, discover every application. If SPECIFIC, focus on the named project.
+      If the user message names a specific environment (e.g. "Sandbox", "Production"),
+      scan ONLY that environment. Otherwise scan all common environments (Sandbox, Production, Development).
+      - Use anypoint_list_applications to list deployed applications (per environment)
+      - Use anypoint_list_apis to list APIs registered in API Manager
+      - Use anypoint_find_assets to search Exchange for related integration assets
+      - Use anypoint_get_api_details for detailed information on discovered APIs
+
+      Always set organizationId as "72aaa304-0a87-40c9-8a75-b32b686ae5f8"
       
-      STEP 2 — Anypoint Platform Scan:
-      - Use anypoint_list_applications to list all deployed applications per environment
-      - Use anypoint_list_apis to list all APIs in API Manager
-      - Use anypoint_find_assets to search Exchange for related assets (pass user_query = project name or "")
-      - Use anypoint_get_api_details for detailed API information
+      Do not perform unnecessary calls. If the input scopes to a specific app or environment, focus there.
+      Return a complete JSON catalog of everything found on Anypoint Platform.
+  reasoning:
+    instructions: ->
+      | Perform Anypoint Platform discovery.
+        
+        Input: {!@request.payload.message.parts[0].text}
+        
+        SCOPING RULES — read the input carefully before making any calls:
+        
+        IMPORTANT: NEVER filter by appName in anypoint_list_applications — app names in Runtime
+        Manager can be in any format (kebab-case, camelCase, with versions, suffixes, etc.).
+        Always retrieve the full list first, then match by similarity in your reasoning.
+        
+        CASE 1 — Input names a SPECIFIC APP (e.g. "scan order-api", "document payment-service"):
+          - Call anypoint_list_applications WITHOUT appName (get ALL deployed apps)
+          - From the returned list, identify apps whose name closely matches the user's input
+            (partial match, case-insensitive, ignore version suffixes and environment suffixes)
+          - Call anypoint_list_apis WITHOUT name filter (get all APIs)
+          - From the returned APIs, identify APIs related to the matched app
+          - Do NOT call anypoint_find_assets unless no apps were returned at all
+          - Set apps_found = count of matched apps (typically "1" for a specific app request)
+        
+        CASE 2 — Input names only an ENVIRONMENT (e.g. "scan Sandbox", "scan Production"):
+          - Call anypoint_list_applications with environmentName = the named environment only
+            (do NOT pass appName)
+          - Call anypoint_list_apis without name filter to list all APIs
+          - Call anypoint_find_assets with a broad query to find Exchange assets
+          - Set apps_found = total count of all apps returned
+        
+        CASE 3 — Input names BOTH an app AND an environment:
+          - Call anypoint_list_applications with environmentName only (do NOT pass appName)
+          - From the results, identify apps whose name closely matches the user's app input
+          - Call anypoint_list_apis without name filter
+          - Set apps_found = count of matched apps
+        
+        Do NOT make unnecessary API calls. Follow only the case that matches the input.
+        
+        Return JSON:
+        {
+          "apps": [{"name": "string", "environment": "string", "status": "string"}],
+          "apis": [{"name": "string", "version": "string", "environment": "string", "asset_id": "string"}],
+          "exchange_assets": [{"name": "string", "type": "string", "version": "string"}],
+          "apps_found": "string",
+          "apis_found": "string",
+          "status": "string"
+        }
+    actions:
+      anypoint_list_applications: @actions.anypoint_list_applications
+      anypoint_list_apis: @actions.anypoint_list_apis
+      anypoint_find_assets: @actions.anypoint_find_assets
+      anypoint_get_api_details: @actions.anypoint_get_api_details
+    outputs:
+      properties:
+        apps:
+          type: "string"
+          description: "JSON array of deployed applications found"
+        apis:
+          type: "string"
+          description: "JSON array of APIs found in API Manager"
+        exchange_assets:
+          type: "string"
+          description: "JSON array of Exchange assets found"
+        apps_found:
+          type: "string"
+          description: "Count of apps found"
+        apis_found:
+          type: "string"
+          description: "Count of APIs found"
+        status:
+          type: "string"
+          description: "Scan status: success or failed"
+  on_exit: ->
+    transition to @router.anypointScanRouter
+
+router anypointScanRouter:
+  routes:
+    - target: @echo.anypointScanSuccess
+      when: @orchestrator.anypointScan.output.status == "success"
+      label: "Anypoint Scan Succeeded"
+  otherwise:
+    target: @echo.anypointScanError
+
+echo anypointScanSuccess:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_WORKING"
+  message: a2a.message({
+    messageId: uuid(),
+    parts: [
+      a2a.textPart("✅ Anypoint Platform MCP scan complete. Found " + @orchestrator.anypointScan.output.apps_found + " apps and " + @orchestrator.anypointScan.output.apis_found + " APIs. Proceeding to GitHub scan...")
+    ]
+  })
+  on_exit: ->
+    transition to @orchestrator.githubScan
+
+echo anypointScanError:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_WORKING"
+  message: a2a.message({
+    messageId: uuid(),
+    parts: [
+      a2a.textPart("⚠️ Anypoint Platform MCP call encountered issues. Continuing with partial data...")
+    ]
+  })
+  on_exit: ->
+    transition to @orchestrator.githubScan
+
+# ─── STEP 2: GitHub Scan ───────────────────────────────────────────────────
+
+orchestrator githubScan:
+  description: "Scan GitHub for Mule repositories, flows, and DataWeave files"
+  label: "GitHub Scan"
+  system:
+    instructions: |
+      You are Sherlock performing GitHub repository discovery.
       
-      STEP 3 — GitHub Scan (per app):
-      - Use github_search_repos to find repos matching the app name
-      - Use github_list_contents to list src/main/mule/ and src/main/resources/dwl/
-      - Use github_get_file_contents to read README.md
+      For each app found in Anypoint, search GitHub for matching repositories.
+      If a specific app was mentioned in the original input, focus only on that app.
+      - Use github_search_repos to find repos matching each app name
+      - Use github_get_file_contents to read src/main/mule/, src/main/resources/dwl/, and README.md
       
-      STEP 4 — GitBooks Scan (per app):
-      - Use gitbooks_list_sites to get all sites in the organization
-      - Use gitbooks_get_structure to get each site's space/page hierarchy
-      - Use gitbooks_get_page to read any relevant existing documentation pages
+      Do not perform unnecessary searches. Focus only on apps relevant to the user's request.
+      Return JSON with all GitHub repositories and file findings.
+  reasoning:
+    instructions: ->
+      | Perform GitHub scan for Mule repositories.
+        
+        Original input: {!@request.payload.message.parts[0].text}
+        Anypoint apps discovered: {!@orchestrator.anypointScan.output.apps}
+        
+        SCOPING RULES:
+        - ALWAYS scope searches to the organization's private repositories only.
+          Set the query to: "<app-name> org:${github.organization}" to restrict to org repos.
+          Never search public GitHub repositories.
+        - If only ONE app was discovered (apps_found = "1"), run a single targeted search:
+            github_search_repos with query = "<app-name> org:${github.organization}"
+            github_get_file_contents for README.md, src/main/mule/ and src/main/resources/dwl/
+        - If MULTIPLE apps were discovered, run one github_search_repos per app name,
+          each scoped to the organization: "<app-name> org:${github.organization}".
+          Keep searches focused — do not search broadly.
+        
+        Do NOT search public repositories. Do NOT make unnecessary searches.
+        Only search for apps in the Anypoint results above.
+        
+        Return JSON:
+        {
+          "repos": [{"app_name": "string", "repo_url": "string", "repo_name": "string", "owner": "string", "mule_files": [], "dataweave_files": [], "readme_summary": "string"}],
+          "repos_found": "string",
+          "status": "string"
+        }
+    actions:
+      github_search_repos: @actions.github_search_repos
+      github_get_file_contents: @actions.github_get_file_contents
+    outputs:
+      properties:
+        repos:
+          type: "string"
+          description: "JSON array of GitHub repos found with file details"
+        repos_found:
+          type: "string"
+          description: "Count of repos found"
+        status:
+          type: "string"
+          description: "Scan status: success or failed"
+  on_exit: ->
+    transition to @router.githubScanRouter
+
+router githubScanRouter:
+  routes:
+    - target: @echo.githubScanSuccess
+      when: @orchestrator.githubScan.output.status == "success"
+      label: "GitHub Scan Succeeded"
+  otherwise:
+    target: @echo.githubScanError
+
+echo githubScanSuccess:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_WORKING"
+  message: a2a.message({
+    messageId: uuid(),
+    parts: [
+      a2a.textPart("✅ GitHub MCP scan complete. Found " + @orchestrator.githubScan.output.repos_found + " repositories. Proceeding to GitBooks scan...")
+    ]
+  })
+  on_exit: ->
+    transition to @orchestrator.gitbooksScan
+
+echo githubScanError:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_WORKING"
+  message: a2a.message({
+    messageId: uuid(),
+    parts: [
+      a2a.textPart("⚠️ GitHub MCP call encountered issues. Continuing with partial data...")
+    ]
+  })
+  on_exit: ->
+    transition to @orchestrator.gitbooksScan
+
+# ─── STEP 3: GitBooks Scan ─────────────────────────────────────────────────
+
+orchestrator gitbooksScan:
+  description: "Scan GitBooks for existing documentation pages"
+  label: "GitBooks Scan"
+  system:
+    instructions: |
+      You are Sherlock performing GitBooks documentation discovery.
       
-      STEP 5 — Create Linear Tasks:
+      DISCOVERY WORKFLOW (in order):
+      1. Call gitbooks_list_organizations (operationId: "listOrganizationsForAuthenticatedUser")
+         to dynamically resolve the organization ID — never hardcode it.
+      2. Call gitbooks_list_sites with the discovered organizationId to get all sites.
+      3. For each discovered app name, call gitbooks_search_content using operationId
+         "searchOrganizationContent" with the app name as the search query. This directly
+         returns matching pages with their spaceId and pageId — do NOT browse the hierarchy.
+      4. Call gitbooks_get_page for each matched page to retrieve the full documentation.
+      
+      Prefer gitbooks_search_content over gitbooks_get_structure — search is faster and
+      more reliable because page titles may not exactly match app names (e.g.,
+      "Salesforce System API" matches query "salesforce-system-api").
+      
+      Return JSON with all GitBooks documentation found.
+  reasoning:
+    instructions: ->
+      | Perform GitBooks documentation scan.
+        
+        Original input: {!@request.payload.message.parts[0].text}
+        Anypoint apps discovered: {!@orchestrator.anypointScan.output.apps}
+        
+        STEP 1 — Discover org ID:
+        - Call gitbooks_list_organizations with operationId = "listOrganizationsForAuthenticatedUser"
+        - Extract the "id" field from the first item in the returned "items" array.
+        
+        STEP 2 — List sites:
+        - Call gitbooks_list_sites with the discovered organizationId.
+        
+        STEP 3 — Search for each app:
+        - For each app name in the Anypoint discovery results, call gitbooks_search_content with:
+            operationId = "searchOrganizationContent"
+            params = { "path": { "organizationId": "<discovered-org-id>" }, "query": { "query": "<app-name>" } }
+        - From the results, extract spaceId and pageId for each matching page.
+        - If only one app was discovered, run a single search for that app name.
+        
+        STEP 4 — Read matched pages:
+        - Call gitbooks_get_page for each page returned by the search.
+        - Do NOT use gitbooks_get_structure to browse the hierarchy unless search returns no results.
+        
+        Do NOT read every page. Only read pages relevant to the discovered apps.
+        
+        Return JSON:
+        {
+          "docs": [{"app_name": "string", "title": "string", "url": "string", "spaceId": "string", "pageId": "string", "summary": "string"}],
+          "docs_found": "string",
+          "status": "string"
+        }
+    actions:
+      gitbooks_list_organizations: @actions.gitbooks_list_organizations
+      gitbooks_search_content: @actions.gitbooks_search_content
+      gitbooks_list_sites: @actions.gitbooks_list_sites
+      gitbooks_get_structure: @actions.gitbooks_get_structure
+      gitbooks_get_page: @actions.gitbooks_get_page
+    outputs:
+      properties:
+        docs:
+          type: "string"
+          description: "JSON array of GitBooks documentation pages found"
+        docs_found:
+          type: "string"
+          description: "Count of documentation pages found"
+        status:
+          type: "string"
+          description: "Scan status: success or failed"
+  on_exit: ->
+    transition to @router.gitbooksScanRouter
+
+router gitbooksScanRouter:
+  routes:
+    - target: @echo.gitbooksScanSuccess
+      when: @orchestrator.gitbooksScan.output.status == "success"
+      label: "GitBooks Scan Succeeded"
+  otherwise:
+    target: @echo.gitbooksScanError
+
+echo gitbooksScanSuccess:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_WORKING"
+  message: a2a.message({
+    messageId: uuid(),
+    parts: [
+      a2a.textPart("✅ GitBooks MCP scan complete. Found " + @orchestrator.gitbooksScan.output.docs_found + " documentation pages. Proceeding to Linear task creation...")
+    ]
+  })
+  on_exit: ->
+    transition to @orchestrator.linearCreation
+
+echo gitbooksScanError:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_WORKING"
+  message: a2a.message({
+    messageId: uuid(),
+    parts: [
+      a2a.textPart("⚠️ GitBooks MCP call encountered issues. Continuing with partial data...")
+    ]
+  })
+  on_exit: ->
+    transition to @orchestrator.linearCreation
+
+# ─── STEP 4: Linear Task Creation ─────────────────────────────────────────
+
+orchestrator linearCreation:
+  description: "Create Linear tracking tasks for all discovered apps"
+  label: "Linear Task Creation"
+  system:
+    instructions: |
+      You are Sherlock creating Linear tracking tasks for all discovered apps.
+      
       - Use linear_list_teams to get available teams (pass limit="10")
-      - For each app discovered, use linear_save_issue to create: 
+      - For each app discovered, use linear_save_issue to create:
           title: "[KATE] Document: <App Name>"
-          description: full markdown description with all findings
+          description: full markdown description with Anypoint, GitHub, and GitBooks findings
           team: first available team name
           priority: "3" (medium)
-      - After creating each issue, use linear_save_comment to add finding comments:
+      - After creating each issue, use linear_save_comment to add individual finding comments:
           "Sherlock — API found: <name> v<version> in <environment>"
           "Sherlock — GitHub repo: <url> | Mule files: <n> | DataWeave files: <n>"
           "Sherlock — GitBooks doc found: <title> | <url>"
@@ -198,11 +519,22 @@ orchestrator discoverAndTrack:
       Return the complete catalog JSON with linear issue IDs per app.
   reasoning:
     instructions: ->
-      | Perform full discovery and create Linear tracking tasks.
+      | Create Linear tasks for all discovered apps.
         
-        Input: {!@request.payload.message.parts[0].text}
+        Original input: {!@request.payload.message.parts[0].text}
+        Anypoint apps: {!@orchestrator.anypointScan.output.apps}
+        Anypoint APIs: {!@orchestrator.anypointScan.output.apis}
+        GitHub repos: {!@orchestrator.githubScan.output.repos}
+        GitBooks docs: {!@orchestrator.gitbooksScan.output.docs}
         
-        Execute all 5 steps. Return JSON:
+        SCOPING RULES:
+        - Call linear_list_teams once to get the team list.
+        - Create EXACTLY ONE Linear task per discovered app — no more.
+        - If only one app was discovered (single-app scope), create exactly one task.
+        - After creating each issue, add individual finding comments using linear_save_comment.
+        - Do NOT create duplicate tasks. Check the app name before creating.
+        
+        Return JSON:
         {
           "apps": [{
             "name": "string",
@@ -215,43 +547,71 @@ orchestrator discoverAndTrack:
           }],
           "total_apps": "string",
           "linear_team_name": "string",
+          "catalog": "string",
           "status": "string"
         }
     actions:
-      anypoint_list_applications: @actions.anypoint_list_applications
-      anypoint_list_apis: @actions.anypoint_list_apis
-      anypoint_find_assets: @actions.anypoint_find_assets
-      anypoint_get_api_details: @actions.anypoint_get_api_details
-      github_search_repos: @actions.github_search_repos
-      github_get_file_contents: @actions.github_get_file_contents
-      github_list_contents: @actions.github_list_contents
-      gitbooks_list_sites: @actions.gitbooks_list_sites
-      gitbooks_get_structure: @actions.gitbooks_get_structure
-      gitbooks_get_page: @actions.gitbooks_get_page
       linear_list_teams: @actions.linear_list_teams
       linear_save_issue: @actions.linear_save_issue
       linear_save_comment: @actions.linear_save_comment
     outputs:
       properties:
+        apps:
+          type: "string"
+          description: "JSON array of apps with Linear task IDs"
         catalog:
           type: "string"
           description: "Complete JSON asset catalog with Linear task IDs per app"
         total_apps:
           type: "string"
-          description: "Total number of apps discovered"
+          description: "Total number of apps processed"
         linear_team_name:
           type: "string"
           description: "Linear team used for task creation"
         status:
           type: "string"
-          description: "Discovery status: success or failed"
+          description: "Task creation status: success or failed"
+  on_exit: ->
+    transition to @router.linearCreationRouter
+
+router linearCreationRouter:
+  routes:
+    - target: @echo.linearCreationSuccess
+      when: @orchestrator.linearCreation.output.status == "success"
+      label: "Linear Tasks Created Successfully"
+  otherwise:
+    target: @echo.linearCreationError
+
+echo linearCreationSuccess:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_WORKING"
+  message: a2a.message({
+    messageId: uuid(),
+    parts: [
+      a2a.textPart("✅ Linear MCP tasks created. " + @orchestrator.linearCreation.output.total_apps + " tasks created for team: " + @orchestrator.linearCreation.output.linear_team_name + ". Finalizing...")
+    ]
+  })
   on_exit: ->
     transition to @router.discoveryRouter
+
+echo linearCreationError:
+  kind: "a2a:status_update_event"
+  state: "TASK_STATE_WORKING"
+  message: a2a.message({
+    messageId: uuid(),
+    parts: [
+      a2a.textPart("⚠️ Linear MCP task creation encountered issues. Partial tasks may have been created.")
+    ]
+  })
+  on_exit: ->
+    transition to @router.discoveryRouter
+
+# ─── FINAL ROUTER ─────────────────────────────────────────────────────────
 
 router discoveryRouter:
   routes:
     - target: @echo.discoverySuccess
-      when: @orchestrator.discoverAndTrack.output.status == "success"
+      when: @orchestrator.linearCreation.output.status == "success"
       label: "Discovery Successful"
   otherwise:
     target: @echo.discoveryError
@@ -262,7 +622,7 @@ echo discoverySuccess:
   message: a2a.message({
     messageId: uuid(),
     parts: [
-      a2a.textPart("✅ Sherlock completed reconnaissance. Discovered {!@orchestrator.discoverAndTrack.output.total_apps} apps. Linear tasks created.\n\nTeam: {!@orchestrator.discoverAndTrack.output.linear_team_name}\n\nCatalog:\n{!@orchestrator.discoverAndTrack.output.catalog}")
+      a2a.textPart("✅ Sherlock completed reconnaissance. Discovered " + @orchestrator.linearCreation.output.total_apps + " apps. Linear tasks created.\n\nTeam: " + @orchestrator.linearCreation.output.linear_team_name + "\n\nCatalog:\n" + @orchestrator.linearCreation.output.catalog)
     ]
   })
 
@@ -272,6 +632,6 @@ echo discoveryError:
   message: a2a.message({
     messageId: uuid(),
     parts: [
-      a2a.textPart("❌ Sherlock encountered an error. Partial catalog: {!@orchestrator.discoverAndTrack.output.catalog}")
+      a2a.textPart("❌ Sherlock encountered an error during discovery.\n\nAnypoint apps found: " + @orchestrator.anypointScan.output.apps_found + "\nGitHub repos found: " + @orchestrator.githubScan.output.repos_found + "\nGitBooks docs found: " + @orchestrator.gitbooksScan.output.docs_found + "\n\nPartial catalog: " + @orchestrator.linearCreation.output.catalog)
     ]
   })

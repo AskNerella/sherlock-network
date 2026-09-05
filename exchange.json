@@ -4,7 +4,7 @@
   "classifier": "agentic-network",
   "organizationId": "72aaa304-0a87-40c9-8a75-b32b686ae5f8",
   "descriptorVersion": "1.0.0",
-  "apiVersion": "v1",
+  "apiVersion": "v2",
   "tags": [],
   "metadata": {
     "variables": {
