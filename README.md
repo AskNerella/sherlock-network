@@ -1,6 +1,6 @@
-# 🔍 Sherlock — Recon & Discovery Agent
+# 🔍 Sherlock — Recon & Discovery Agent (POC - Proof Of Concept)
 
-Sherlock is the **automated reconnaissance agent** in the [KATE](https://kate-gateway.rxfr6l.usa-e2.cloudhub.io) documentation network. Its job is to scan every corner of your integration estate — Anypoint Platform, GitHub, and GitBooks — and produce a structured asset catalog with Linear tracking tasks for every discovered application.
+Sherlock is the **automated reconnaissance agent** in the KATE documentation network. Its job is to scan every corner of your integration estate — Anypoint Platform, GitHub, and GitBooks — and produce a structured asset catalog with Linear tracking tasks for every discovered application.
 
 ---
 
